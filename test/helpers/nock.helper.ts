@@ -147,6 +147,25 @@ function buildPackagesHtml(packages: Package[]): string {
   return `<html><body><table>${rows}</table></body></html>`;
 }
 
+function buildPackagesCardHtml(packages: Package[]): string {
+  const cards = packages
+    .map(
+      (pkg) => `
+    <div class="card">
+      <div class="card-body">
+        <form method="POST">
+          <button type="submit" name="delete_item" value="${pkg.id}">X</button>
+        </form>
+        <h5 class="card-title">Трек-код: ${pkg.trackCode}</h5>
+        <h6 class="card-subtitle">Наименование: ${pkg.name}</h6>
+      </div>
+    </div>
+  `,
+    )
+    .join('');
+  return `<html><body>${cards}</body></html>`;
+}
+
 export function nockList({
   page = 1,
   packages = [],
@@ -158,6 +177,21 @@ export function nockList({
     .get('/view_verified_codes.php')
     .query({ page })
     .reply(200, buildPackagesHtml(packages), {
+      'Content-Type': 'text/html',
+    });
+}
+
+export function nockListCards({
+  page = 1,
+  packages = [],
+}: {
+  page?: number;
+  packages?: Package[];
+}): nock.Scope {
+  return scope()
+    .get('/view_verified_codes.php')
+    .query({ page })
+    .reply(200, buildPackagesCardHtml(packages), {
       'Content-Type': 'text/html',
     });
 }

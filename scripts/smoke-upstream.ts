@@ -248,6 +248,7 @@ async function runSmoke(): Promise<void> {
     await listPackages(ctx);
     await createPackage(ctx);
     await getPackage(ctx);
+    const createdPackageId = ctx.createdPackageId;
     await deletePackage(ctx);
     await logout(ctx);
 
@@ -258,7 +259,7 @@ async function runSmoke(): Promise<void> {
     // eslint-disable-next-line no-console
     console.log('list: ok');
     // eslint-disable-next-line no-console
-    console.log(`create: ok id=${ctx.createdPackageId} trackCode=${trackCode}`);
+    console.log(`create: ok id=${createdPackageId} trackCode=${trackCode}`);
     // eslint-disable-next-line no-console
     console.log('get: ok');
     // eslint-disable-next-line no-console

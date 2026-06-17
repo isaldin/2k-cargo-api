@@ -338,21 +338,24 @@ export class SiteClientService {
     const $ = cheerio.load(html);
     const packages: Package[] = [];
 
-    const deleteLinks = $('[href*="delete_item="], [action*="delete_item="]');
+    const deleteControls = $(
+      '[href*="delete_item="], [action*="delete_item="], button[name="delete_item"], input[name="delete_item"]',
+    );
 
-    deleteLinks.each((_, element) => {
+    deleteControls.each((_, element) => {
       const el = $(element);
       const hrefOrAction = el.attr('href') || el.attr('action') || '';
-      const match = /delete_item=(\d+)/.exec(hrefOrAction);
-      if (!match) {
+      const value = el.attr('value') || '';
+      const idValue = /delete_item=(\d+)/.exec(hrefOrAction)?.[1] || value;
+      if (!/^\d+$/.test(idValue)) {
         return;
       }
 
-      const id = parseInt(match[1], 10);
+      const id = Number(idValue);
       const container =
         el.closest('tr').length > 0
           ? el.closest('tr')
-          : el.closest('div, li, article, .card, .item, .package');
+          : el.closest('.card, .card-body, div, li, article, .item, .package');
 
       const textLines = container
         .text()
@@ -361,16 +364,24 @@ export class SiteClientService {
         .filter((line) => line.length > 0);
 
       const trackCodeIndex = textLines.findIndex((line) =>
-        /^[A-Z0-9\-]{5,}$/i.test(line),
+        /^(?:Трек-код:\s*)?[A-Z0-9-]{5,}$/i.test(line),
       );
 
-      const trackCode = trackCodeIndex >= 0 ? textLines[trackCodeIndex] : '';
+      const trackCode =
+        trackCodeIndex >= 0
+          ? textLines[trackCodeIndex].replace(/^Трек-код:\s*/i, '').trim()
+          : '';
       const name =
-        trackCodeIndex >= 0 && trackCodeIndex + 1 < textLines.length
+        textLines
+          .find((line) => /^Наименование:\s*/i.test(line))
+          ?.replace(/^Наименование:\s*/i, '')
+          .trim() ||
+        (trackCodeIndex >= 0 && trackCodeIndex + 1 < textLines.length
           ? textLines[trackCodeIndex + 1]
           : textLines.find(
               (line) => line !== String(id) && !/delete_item/i.test(line),
-            ) || '';
+            )) ||
+        '';
 
       if (trackCode) {
         packages.push({ id, trackCode, name });

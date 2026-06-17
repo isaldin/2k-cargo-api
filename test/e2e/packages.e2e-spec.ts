@@ -4,6 +4,7 @@ import { bootstrapApp } from '../helpers/app.helper';
 import { createSession } from '../helpers/session.factory';
 import {
   nockList,
+  nockListCards,
   nockListEmpty,
   nockListWithPackage,
   nockAdd,
@@ -46,6 +47,32 @@ describe('PackagesController (e2e)', () => {
         trackCode: 'TRACK12345',
         name: 'First Package',
       });
+    });
+
+    it('parses current upstream card layout', async () => {
+      nockListCards({
+        page: 1,
+        packages: [
+          {
+            id: 176109,
+            trackCode: 'SMOKE-20260617050814',
+            name: 'Smoke Test Package',
+          },
+        ],
+      });
+
+      const response = await request(app.getHttpServer())
+        .get('/api/packages?page=1')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(response.body).toEqual([
+        {
+          id: 176109,
+          trackCode: 'SMOKE-20260617050814',
+          name: 'Smoke Test Package',
+        },
+      ]);
     });
 
     it('returns empty list for page 2 when there are no more packages', async () => {
