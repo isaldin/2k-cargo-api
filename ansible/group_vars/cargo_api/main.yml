@@ -1,0 +1,33 @@
+app_name: 2k-cargo-api
+
+# Public domain served by Caddy. DNS A/AAAA records must point to the VPS.
+app_domain: 164.68.101.185
+caddy_site_address: "{{ app_domain }}"
+caddy_email: ""
+
+# Source checkout used on the VPS. Set this to your real git remote.
+app_repo_url: git@github.com:isaldin/2k-cargo-api.git
+app_git_version: main
+
+app_root: /opt/2k-cargo-api
+app_release_dir: "{{ app_root }}/current"
+app_data_dir: "{{ app_root }}/data"
+app_backup_dir: "{{ app_root }}/backups"
+
+app_port: 3000
+site_base_url: https://2k-cargo-krg.kz
+database_path: ./data/sessions.sqlite
+database_synchronize: false
+package_scan_page_limit: 10
+auto_relogin_retry_limit: 1
+
+# Disabled when empty. Recommended for public deployments.
+session_ttl_seconds: 3600
+
+configure_firewall: true
+ssh_port: 22
+
+enable_backups: true
+backup_retention_days: 14
+backup_cron_minute: "17"
+backup_cron_hour: "2"

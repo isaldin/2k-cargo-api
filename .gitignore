@@ -1,0 +1,6 @@
+.idea
+node_modules
+dist
+ansible/.ansible/
+ansible/inventory.ini
+ansible/group_vars/cargo_api/vault.yml

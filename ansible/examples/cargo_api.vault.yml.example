@@ -1,0 +1,11 @@
+# Copy this file to the group-specific vault path and encrypt it:
+#   mkdir -p ansible/group_vars/cargo_api
+#   cp ansible/examples/cargo_api.vault.yml.example ansible/group_vars/cargo_api/vault.yml
+#   ansible-vault encrypt ansible/group_vars/cargo_api/vault.yml
+#
+# Then run playbooks with:
+#   ansible-playbook playbooks/deploy.yml --ask-vault-pass
+
+# Must be exactly 32 bytes. Generate and store it permanently; losing it makes
+# existing encrypted upstream passwords undecryptable.
+app_master_key: "0123456789abcdef0123456789abcdef"

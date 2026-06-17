@@ -1,0 +1,270 @@
+openapi: 3.0.0
+paths:
+  /api/auth/login:
+    post:
+      operationId: AuthController_login
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginDto'
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponseDto'
+        '400':
+          description: Invalid input
+        '429':
+          description: Rate limit exceeded
+        '502':
+          description: Upstream error
+      summary: Authenticate and create a session
+      tags: &ref_0
+        - Auth
+  /api/auth/logout:
+    post:
+      operationId: AuthController_logout
+      parameters: []
+      responses:
+        '204':
+          description: Session removed successfully
+        '401':
+          description: Missing or invalid token
+      security:
+        - bearer: []
+      summary: End the current session
+      tags: *ref_0
+  /api/packages:
+    get:
+      operationId: PackagesController_findAll
+      parameters:
+        - name: page
+          required: false
+          in: query
+          description: Page number
+          schema:
+            minimum: 1
+            default: 1
+            example: 1
+            type: number
+      responses:
+        '200':
+          description: List of packages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Package'
+        '400':
+          description: Invalid query parameters
+        '401':
+          description: Missing or invalid token
+        '502':
+          description: Upstream error
+      security: &ref_1
+        - bearer: []
+      summary: List packages
+      tags: &ref_2
+        - Packages
+    post:
+      operationId: PackagesController_create
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePackageDto'
+      responses:
+        '201':
+          description: Package created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Package'
+        '400':
+          description: Invalid input
+        '401':
+          description: Missing or invalid token
+        '502':
+          description: Upstream error
+      security: *ref_1
+      summary: Add a new package
+      tags: *ref_2
+  /api/packages/{id}:
+    get:
+      operationId: PackagesController_findOne
+      parameters:
+        - name: id
+          required: true
+          in: path
+          description: Upstream package item id
+          schema:
+            type: number
+      responses:
+        '200':
+          description: Package found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Package'
+        '401':
+          description: Missing or invalid token
+        '404':
+          description: Package not found
+        '502':
+          description: Upstream error
+      security: *ref_1
+      summary: Get a package by ID
+      tags: *ref_2
+    delete:
+      operationId: PackagesController_remove
+      parameters:
+        - name: id
+          required: true
+          in: path
+          description: Upstream package item id
+          schema:
+            type: number
+      responses:
+        '204':
+          description: Package deleted
+        '401':
+          description: Missing or invalid token
+        '404':
+          description: Package not found
+        '502':
+          description: Upstream error
+      security: *ref_1
+      summary: Delete a package
+      tags: *ref_2
+    patch:
+      operationId: PackagesController_update
+      parameters:
+        - name: id
+          required: true
+          in: path
+          description: Upstream package item id
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePackageDto'
+      responses:
+        '200':
+          description: Package updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Package'
+        '400':
+          description: Invalid input
+        '401':
+          description: Missing or invalid token
+        '404':
+          description: Package not found
+        '502':
+          description: Upstream error
+      security: *ref_1
+      summary: Update a package
+      tags: *ref_2
+info:
+  title: 2K Cargo API
+  description: REST API wrapper over the 2K Cargo cargo-tracking website.
+  version: 1.0.0
+  contact: {}
+tags: []
+servers: []
+components:
+  securitySchemes:
+    bearer:
+      scheme: bearer
+      bearerFormat: opaque UUID
+      type: http
+  schemas:
+    LoginDto:
+      type: object
+      properties:
+        phone:
+          type: string
+          description: Phone number in Kazakh format. Accepts raw digits or formatted input; stored and sent upstream as digits only.
+          examples:
+            - '77073006789'
+            - +7 (707) 300-67-89
+          minLength: 10
+          maxLength: 20
+        password:
+          type: string
+          description: Upstream account password
+          minLength: 1
+          writeOnly: true
+      required:
+        - phone
+        - password
+    LoginResponseDto:
+      type: object
+      properties:
+        token:
+          type: string
+          description: Opaque Bearer token for subsequent requests
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+      required:
+        - token
+    Package:
+      type: object
+      properties:
+        id:
+          type: number
+          description: Upstream package item id
+          example: 12345
+        trackCode:
+          type: string
+          description: Cargo tracking code
+          example: ABC123456789
+        name:
+          type: string
+          description: Display name or description for the package
+          example: 'Sneakers order #42'
+      required:
+        - id
+        - trackCode
+        - name
+    CreatePackageDto:
+      type: object
+      properties:
+        trackCode:
+          type: string
+          description: Cargo tracking code
+          minLength: 1
+          example: ABC123456789
+        name:
+          type: string
+          description: Display name or description for the package
+          minLength: 1
+          example: 'Sneakers order #42'
+      required:
+        - trackCode
+        - name
+    UpdatePackageDto:
+      type: object
+      properties:
+        trackCode:
+          type: string
+          description: New cargo tracking code. Omit to keep the existing value.
+          minLength: 1
+          example: XYZ987654321
+        name:
+          type: string
+          description: New display name. Omit to keep the existing value.
+          minLength: 1
+          example: 'Updated order #42'

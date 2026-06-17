@@ -1,0 +1,23 @@
+#!/usr/bin/env sh
+set -eu
+
+DB_PATH="{{ app_data_dir }}/sessions.sqlite"
+BACKUP_DIR="{{ app_backup_dir }}"
+RETENTION_DAYS="{{ backup_retention_days }}"
+
+if [ ! -f "$DB_PATH" ]; then
+  echo "backup skipped: database not found at $DB_PATH"
+  exit 0
+fi
+
+mkdir -p "$BACKUP_DIR"
+
+timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+backup_file="${BACKUP_DIR}/sessions-${timestamp}.sqlite"
+
+sqlite3 "$DB_PATH" ".backup '${backup_file}'"
+gzip -f "$backup_file"
+
+find "$BACKUP_DIR" -type f -name 'sessions-*.sqlite.gz' -mtime "+${RETENTION_DAYS}" -delete
+
+echo "backup ok: ${backup_file}.gz"

@@ -1,0 +1,36 @@
+---
+- name: Install and run 2K Cargo API SQLite backup
+  hosts: cargo_api
+  become: true
+
+  tasks:
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ app_backup_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Ensure sqlite3 is installed
+      ansible.builtin.apt:
+        name: sqlite3
+        state: present
+        update_cache: true
+
+    - name: Install SQLite backup script
+      ansible.builtin.template:
+        src: ../templates/backup-sqlite.sh.j2
+        dest: /usr/local/bin/2k-cargo-api-backup
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Run backup now
+      ansible.builtin.command: /usr/local/bin/2k-cargo-api-backup
+      changed_when: true
+      register: backup_result
+
+    - name: Print backup result
+      ansible.builtin.debug:
+        var: backup_result.stdout_lines
