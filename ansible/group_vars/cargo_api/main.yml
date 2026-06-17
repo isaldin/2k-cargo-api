@@ -1,7 +1,7 @@
 app_name: 2k-cargo-api
 
 # Public domain served by Caddy. DNS A/AAAA records must point to the VPS.
-app_domain: 164.68.101.185
+app_domain: 2k-cargo-api.saldin.cloud
 caddy_site_address: "{{ app_domain }}"
 caddy_email: ""
 
