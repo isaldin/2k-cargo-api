@@ -61,5 +61,5 @@
 - [x] 7.3 Run `npm run lint`.
 - [x] 7.4 Run local smoke and inspect app logs for request id and upstream
       events.
-- [ ] 7.5 Deploy to VPS and verify `docker compose logs app` contains JSON
+- [x] 7.5 Deploy to VPS and verify `docker compose logs app` contains JSON
       logs and no secrets.
