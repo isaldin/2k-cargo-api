@@ -1,13 +1,29 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { AppLogger } from './common/logging/app-logger.service';
+import { RequestIdMiddleware } from './common/logging/request-id.middleware';
+import { AppConfig } from './config/app.config';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true,
+  });
+  const configService = app.get(ConfigService);
+  const appConfig = configService.getOrThrow<AppConfig>('app');
+  const logger = app.get(AppLogger);
+  logger.configure({
+    level: appConfig.logLevel,
+    format: appConfig.logFormat,
+    stacks: appConfig.logStacks,
+  });
+  app.useLogger(logger);
 
   app.use(helmet());
+  app.use(new RequestIdMiddleware().use);
   app.setGlobalPrefix('api');
   app.useGlobalPipes(
     new ValidationPipe({

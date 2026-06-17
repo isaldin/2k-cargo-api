@@ -21,6 +21,11 @@ database_synchronize: false
 package_scan_page_limit: 10
 auto_relogin_retry_limit: 1
 
+# Logging
+log_level: info
+log_format: json
+log_stacks: false
+
 # Disabled when empty. Recommended for public deployments.
 session_ttl_seconds: 3600
 

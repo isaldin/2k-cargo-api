@@ -323,6 +323,49 @@ npm run smoke:upstream
 The smoke script creates and deletes one upstream package. Use only a dedicated
 test account.
 
+## Log Inspection
+
+Application logs are written as structured JSON to stdout/stderr and collected
+by Docker. Every response includes an `X-Request-Id` header that is also present
+on every log line for that request.
+
+View recent logs:
+
+```bash
+ssh 2k-cargo-api
+cd /opt/2k-cargo-api
+sudo docker compose logs --tail=200 app
+sudo docker compose logs --tail=200 caddy
+```
+
+Follow logs live:
+
+```bash
+sudo docker compose logs -f app
+```
+
+Correlate by request id:
+
+```bash
+sudo docker compose logs app | grep '"requestId":"01JZ...'
+```
+
+Filter by event or error level:
+
+```bash
+sudo docker compose logs app | grep '"event":"upstream.list.completed"'
+sudo docker compose logs app | grep '"level":"error"'
+```
+
+With `jq` installed:
+
+```bash
+sudo docker compose logs app --no-log-prefix | jq 'select(.level=="error")'
+```
+
+Logging is controlled by `LOG_LEVEL`, `LOG_FORMAT`, and `LOG_STACKS` in the
+rendered `.env` file. Keep `LOG_STACKS=false` in production.
+
 ## Rollback
 
 Deploy a previous git ref:

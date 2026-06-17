@@ -1,4 +1,5 @@
 import { registerAs } from '@nestjs/config';
+import { LogLevel, LogFormat } from '../common/logging/log.config';
 
 export interface AppConfig {
   port: number;
@@ -9,6 +10,9 @@ export interface AppConfig {
   packageScanPageLimit: number;
   autoReloginRetryLimit: number;
   sessionTtlSeconds?: number;
+  logLevel: LogLevel;
+  logFormat: LogFormat;
+  logStacks: boolean;
 }
 
 export default registerAs<AppConfig>('app', () => {
@@ -55,6 +59,10 @@ export default registerAs<AppConfig>('app', () => {
     }
   }
 
+  const logLevel = process.env.LOG_LEVEL ?? 'info';
+  const logFormat = process.env.LOG_FORMAT ?? 'json';
+  const logStacks = process.env.LOG_STACKS === 'true';
+
   return {
     port,
     masterKey,
@@ -64,5 +72,10 @@ export default registerAs<AppConfig>('app', () => {
     packageScanPageLimit,
     autoReloginRetryLimit,
     sessionTtlSeconds,
+    logLevel: ['debug', 'info', 'warn', 'error'].includes(logLevel)
+      ? (logLevel as LogLevel)
+      : 'info',
+    logFormat: logFormat === 'pretty' ? 'pretty' : 'json',
+    logStacks,
   };
 });

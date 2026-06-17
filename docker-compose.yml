@@ -11,6 +11,9 @@ services:
       - DATABASE_SYNCHRONIZE=${DATABASE_SYNCHRONIZE:-false}
       - PACKAGE_SCAN_PAGE_LIMIT=${PACKAGE_SCAN_PAGE_LIMIT:-10}
       - AUTO_RELOGIN_RETRY_LIMIT=${AUTO_RELOGIN_RETRY_LIMIT:-1}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      - LOG_STACKS=${LOG_STACKS:-false}
     volumes:
       - ./data:/app/data
     restart: unless-stopped

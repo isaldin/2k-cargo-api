@@ -13,6 +13,11 @@ import { Cookie, CookieJar } from 'tough-cookie';
 import { ApiSession } from '../session/session.entity';
 import { EncryptionService } from '../common/encryption.service';
 import { SessionService } from '../session/session.service';
+import { AppLogger } from '../common/logging/app-logger.service';
+import {
+  hashForLog,
+  sanitizeTextSnippet,
+} from '../common/logging/redaction.util';
 import { AppConfig } from '../config/app.config';
 import { Package, PackageStatus } from './package.types';
 import { SessionExpiredError } from './site-client.errors';
@@ -33,6 +38,7 @@ export class SiteClientService {
     private readonly configService: ConfigService,
     private readonly encryptionService: EncryptionService,
     private readonly sessionService: SessionService,
+    private readonly logger: AppLogger,
   ) {
     const appConfig = this.configService.getOrThrow<AppConfig>('app');
     this.client = wrapper(
@@ -90,10 +96,45 @@ export class SiteClientService {
     return JSON.stringify(serialized);
   }
 
+  private async logUpstreamCall<T>(
+    endpoint: string,
+    path: string,
+    operation: () => Promise<{ status: number; result: T }>,
+    options: { retryAttempt?: number; sessionExpiredDetected?: boolean } = {},
+  ): Promise<T> {
+    const start = Date.now();
+    let upstreamStatus: number | undefined;
+
+    try {
+      const { status, result } = await operation();
+      upstreamStatus = status;
+      return result;
+    } catch (error) {
+      upstreamStatus =
+        (error as { response?: { status?: number } }).response?.status ??
+        upstreamStatus;
+      throw error;
+    } finally {
+      const durationMs = Date.now() - start;
+      this.logger.info('upstream.' + endpoint + '.completed', {
+        upstreamEndpoint: endpoint,
+        upstreamPath: path,
+        upstreamStatus,
+        durationMs,
+        retryAttempt: options.retryAttempt ?? 0,
+        sessionExpiredDetected: options.sessionExpiredDetected ?? false,
+      });
+    }
+  }
+
   private checkSessionExpired(response: AxiosResponse): void {
     if (response.status === 302) {
       const location = String(response.headers.location || '');
       if (location.includes('login.php')) {
+        this.logger.warnEvent('upstream.session_expired.detected', {
+          upstreamEndpoint: 'session_check',
+          upstreamStatus: response.status,
+        });
         throw new SessionExpiredError();
       }
       return;
@@ -104,6 +145,10 @@ export class SiteClientService {
       const $ = cheerio.load(String(response.data));
       const loginForm = $('form[action*="login.php"]').first();
       if (loginForm.length > 0) {
+        this.logger.warnEvent('upstream.session_expired.detected', {
+          upstreamEndpoint: 'session_check',
+          upstreamStatus: response.status,
+        });
         throw new SessionExpiredError();
       }
     }
@@ -147,13 +192,23 @@ export class SiteClientService {
     const jarCookies = await jar.getCookies(this.appConfig.siteBaseUrl);
     const cookieUserId = this.parseNumericCookie(jarCookies, 'cuid');
     if (cookieUserId !== null) {
+      this.logger.info('site_parser.user_id.resolved', {
+        userIdSource: 'cuid',
+      });
       return cookieUserId;
     }
 
-    const response = await this.client.get('/view_verified_codes.php', {
-      params: { page: 1 },
-      jar,
-    } as never);
+    const response = await this.logUpstreamCall(
+      'list',
+      '/view_verified_codes.php',
+      async () => {
+        const res = await this.client.get('/view_verified_codes.php', {
+          params: { page: 1 },
+          jar,
+        } as never);
+        return { status: res.status, result: res };
+      },
+    );
 
     this.checkSessionExpired(response);
 
@@ -163,14 +218,42 @@ export class SiteClientService {
       );
     }
 
-    const htmlUserId = this.parseUserIdFromHtml(String(response.data));
+    const html = String(response.data);
+    const htmlUserId = this.parseUserIdFromHtml(html);
     if (htmlUserId !== null) {
+      const source = this.resolveUserIdSource(html);
+      this.logger.info('site_parser.user_id.resolved', {
+        userIdSource: source,
+      });
       return htmlUserId;
     }
+
+    this.logger.warnEvent('site_parser.user_id.failed', {
+      upstreamStatus: response.status,
+      contentType: String(response.headers['content-type'] || ''),
+      snippet: sanitizeTextSnippet(html),
+    });
 
     throw new BadGatewayException(
       'Upstream login succeeded but user id could not be resolved',
     );
+  }
+
+  private resolveUserIdSource(
+    html: string,
+  ): 'html_input' | 'html_data_attr' | 'script' {
+    const $ = cheerio.load(html);
+    const inputValue = $('[name="user_id"]').first().attr('value')?.trim();
+    if (inputValue && /^\d+$/.test(inputValue)) {
+      return 'html_input';
+    }
+
+    const dataValue = $('[data-user-id]').first().attr('data-user-id')?.trim();
+    if (dataValue && /^\d+$/.test(dataValue)) {
+      return 'html_data_attr';
+    }
+
+    return 'script';
   }
 
   async login(
@@ -178,15 +261,22 @@ export class SiteClientService {
     password: string,
   ): Promise<{ userId: number; cookies: string }> {
     const jar = new CookieJar();
-    const response = await this.client.post(
+    const response = await this.logUpstreamCall(
+      'login',
       '/login.php',
-      new URLSearchParams({ n: phone, p: password, mem: '1' }),
-      {
-        jar,
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-      } as never,
+      async () => {
+        const res = await this.client.post(
+          '/login.php',
+          new URLSearchParams({ n: phone, p: password, mem: '1' }),
+          {
+            jar,
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+          } as never,
+        );
+        return { status: res.status, result: res };
+      },
     );
 
     if (response.status !== 302) {
@@ -206,16 +296,26 @@ export class SiteClientService {
 
   async logout(cookies: string): Promise<void> {
     const jar = this.buildJar(cookies);
-    await this.client.get('/exit.php', { jar } as never);
+    await this.logUpstreamCall('logout', '/exit.php', async () => {
+      const res = await this.client.get('/exit.php', { jar } as never);
+      return { status: res.status, result: undefined };
+    });
   }
 
   async listPackages(session: ApiSession, page = 1): Promise<Package[]> {
     return this.withRelogin(session, async (currentSession) => {
       const jar = this.buildJar(currentSession.siteCookies);
-      const response = await this.client.get('/view_verified_codes.php', {
-        params: { page },
-        jar,
-      } as never);
+      const response = await this.logUpstreamCall(
+        'list',
+        '/view_verified_codes.php',
+        async () => {
+          const res = await this.client.get('/view_verified_codes.php', {
+            params: { page },
+            jar,
+          } as never);
+          return { status: res.status, result: res };
+        },
+      );
 
       this.checkSessionExpired(response);
 
@@ -225,9 +325,40 @@ export class SiteClientService {
         );
       }
 
-      const packages = this.parsePackages(String(response.data));
-      currentSession.siteCookies = await this.serializeJar(jar);
-      return packages;
+      const html = String(response.data);
+      try {
+        const packages = this.parsePackages(html);
+        currentSession.siteCookies = await this.serializeJar(jar);
+
+        const statusRowsCount = packages.reduce(
+          (sum, pkg) => sum + pkg.statuses.length,
+          0,
+        );
+        const activeStatusCount = packages.reduce(
+          (sum, pkg) => sum + pkg.statuses.filter((s) => s.active).length,
+          0,
+        );
+        const inactiveStatusCount = statusRowsCount - activeStatusCount;
+
+        this.logger.info('site_parser.packages.parsed', {
+          packageCount: packages.length,
+          statusRowsCount,
+          activeStatusCount,
+          inactiveStatusCount,
+          page,
+        });
+
+        return packages;
+      } catch (error) {
+        this.logger.warnEvent('site_parser.packages.failed', {
+          upstreamStatus: response.status,
+          contentType: String(response.headers['content-type'] || ''),
+          snippet: sanitizeTextSnippet(html),
+          errorName: (error as Error).name,
+          errorMessage: (error as Error).message,
+        });
+        throw error;
+      }
     });
   }
 
@@ -239,26 +370,31 @@ export class SiteClientService {
   ): Promise<void> {
     return this.withRelogin(session, async (currentSession) => {
       const jar = this.buildJar(currentSession.siteCookies);
-      const response = await this.client.post(
+      const response = await this.logUpstreamCall(
+        'add',
         '/process_verification.php',
-        new URLSearchParams({
-          user_id: String(userId),
-          track_code: trackCode,
-          names: name,
-        }),
-        {
-          jar,
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        } as never,
+        async () => {
+          const res = await this.client.post(
+            '/process_verification.php',
+            new URLSearchParams({
+              user_id: String(userId),
+              track_code: trackCode,
+              names: name,
+            }),
+            {
+              jar,
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            } as never,
+          );
+          return { status: res.status, result: res };
+        },
       );
 
       this.checkSessionExpired(response);
 
       const text = String(response.data);
       if (/уже существует|already exists|duplicate|_exists_/i.test(text)) {
-        throw new ConflictException(
-          `Track code ${trackCode} already exists upstream`,
-        );
+        throw new ConflictException('Track code already exists upstream');
       }
 
       if (response.status >= 400) {
@@ -274,13 +410,20 @@ export class SiteClientService {
   async deletePackage(session: ApiSession, itemId: number): Promise<void> {
     return this.withRelogin(session, async (currentSession) => {
       const jar = this.buildJar(currentSession.siteCookies);
-      const response = await this.client.post(
+      const response = await this.logUpstreamCall(
+        'delete',
         '/view_verified_codes.php',
-        new URLSearchParams({ delete_item: String(itemId) }),
-        {
-          jar,
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        } as never,
+        async () => {
+          const res = await this.client.post(
+            '/view_verified_codes.php',
+            new URLSearchParams({ delete_item: String(itemId) }),
+            {
+              jar,
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            } as never,
+          );
+          return { status: res.status, result: res };
+        },
       );
 
       this.checkSessionExpired(response);
@@ -301,6 +444,7 @@ export class SiteClientService {
   ): Promise<T> {
     let attempts = 0;
     let currentSession: CookieSession = { ...session };
+    const sessionTokenHash = hashForLog(session.token);
 
     while (true) {
       try {
@@ -313,7 +457,16 @@ export class SiteClientService {
           throw error;
         }
 
+        this.logger.warnEvent('upstream.relogin.started', {
+          sessionTokenHash,
+          retryAttempt: attempts + 1,
+        });
+
         if (attempts >= this.appConfig.autoReloginRetryLimit) {
+          this.logger.errorEvent('upstream.relogin.failed', {
+            sessionTokenHash,
+            reason: 'Retry limit exhausted',
+          });
           throw new UnauthorizedException(
             'Upstream session could not be restored',
           );
@@ -325,13 +478,29 @@ export class SiteClientService {
           this.appConfig.masterKey,
         );
 
-        const { userId, cookies } = await this.login(
-          currentSession.phone,
-          password,
-        );
+        try {
+          const { userId, cookies } = await this.login(
+            currentSession.phone,
+            password,
+          );
 
-        await this.sessionService.updateCookies(currentSession.token, cookies);
-        currentSession = { ...currentSession, siteCookies: cookies, userId };
+          await this.sessionService.updateCookies(
+            currentSession.token,
+            cookies,
+          );
+          currentSession = { ...currentSession, siteCookies: cookies, userId };
+          this.logger.info('upstream.relogin.success', {
+            sessionTokenHash,
+            retryAttempt: attempts,
+          });
+        } catch (reloginError) {
+          const reason = (reloginError as Error).message ?? 'Unknown error';
+          this.logger.errorEvent('upstream.relogin.failed', {
+            sessionTokenHash,
+            reason,
+          });
+          throw reloginError;
+        }
       }
     }
   }

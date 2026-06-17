@@ -78,6 +78,9 @@ Variables:
 | `PACKAGE_SCAN_PAGE_LIMIT` | No | `10` | Page scan limit for lookup operations. |
 | `AUTO_RELOGIN_RETRY_LIMIT` | No | `1` | Retries after upstream session expiry. |
 | `SESSION_TTL_SECONDS` | No | disabled | Optional idle TTL for wrapper sessions. |
+| `LOG_LEVEL` | No | `info` | Application log level: `debug`, `info`, `warn`, `error`. |
+| `LOG_FORMAT` | No | `json` | Output format: `json` for aggregators, `pretty` for local development. |
+| `LOG_STACKS` | No | `false` | Include stack traces in error logs. Keep `false` in production. |
 
 ## Local Development
 
@@ -223,6 +226,50 @@ npm run smoke:upstream
 
 The script requires `SMOKE_TRACK_CODE` to start with `SMOKE-`, never logs the
 password, and attempts cleanup on failure.
+
+## Production Logs
+
+Every request and business operation emits structured JSON logs to stdout/stderr.
+The `X-Request-Id` response header is also included in every response and can be
+used to correlate all log lines for a single request.
+
+On the VPS, inspect recent application logs:
+
+```bash
+ssh 2k-cargo-api
+cd /opt/2k-cargo-api
+sudo docker compose logs --tail=200 app
+sudo docker compose logs --tail=200 caddy
+```
+
+Follow logs live:
+
+```bash
+sudo docker compose logs -f app
+```
+
+Filter by `requestId`, event, or level:
+
+```bash
+sudo docker compose logs app | grep '"requestId":"01JZ...'
+sudo docker compose logs app | grep '"event":"upstream.list.completed"'
+sudo docker compose logs app | grep '"level":"error"'
+```
+
+If `jq` is available:
+
+```bash
+sudo docker compose logs app --no-log-prefix | jq 'select(.level=="error")'
+```
+
+Log configuration:
+
+- `LOG_LEVEL=info` — recommended in production.
+- `LOG_FORMAT=json` — recommended for Docker log drivers.
+- `LOG_STACKS=false` — keep `false` in production to avoid leaking internals.
+
+Secrets such as passwords, Bearer tokens, cookies, and the master key are
+redacted before writing to the log stream.
 
 ## VPS Deployment
 
