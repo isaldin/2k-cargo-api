@@ -103,6 +103,25 @@ export function nockLoginRedirectWithNonNumericCuid({
     });
 }
 
+export function nockUserIdPage({
+  userId,
+  page = 1,
+}: {
+  userId?: number;
+  page?: number;
+}): nock.Scope {
+  const input = userId
+    ? `<input type="hidden" name="user_id" value="${userId}">`
+    : '';
+
+  return scope()
+    .get('/view_verified_codes.php')
+    .query({ page })
+    .reply(200, `<html><body>${input}</body></html>`, {
+      'Content-Type': 'text/html',
+    });
+}
+
 export function nockLogout(): nock.Scope {
   return scope().get('/exit.php').reply(200, 'OK');
 }

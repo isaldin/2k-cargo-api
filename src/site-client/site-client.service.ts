@@ -8,7 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import { wrapper } from 'axios-cookiejar-support';
 import * as cheerio from 'cheerio';
-import { CookieJar } from 'tough-cookie';
+import { Cookie, CookieJar } from 'tough-cookie';
 import { ApiSession } from '../session/session.entity';
 import { EncryptionService } from '../common/encryption.service';
 import { SessionService } from '../session/session.service';
@@ -108,6 +108,70 @@ export class SiteClientService {
     }
   }
 
+  private parseNumericCookie(cookies: Cookie[], key: string): number | null {
+    const cookie = cookies.find((item) => item.key === key);
+    const value = cookie?.value.trim() ?? '';
+    if (!/^\d+$/.test(value)) {
+      return null;
+    }
+
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) ? parsed : null;
+  }
+
+  private parseUserIdFromHtml(html: string): number | null {
+    const $ = cheerio.load(html);
+
+    const inputValue = $('[name="user_id"]').first().attr('value')?.trim();
+    if (inputValue && /^\d+$/.test(inputValue)) {
+      return Number(inputValue);
+    }
+
+    const dataValue = $('[data-user-id]').first().attr('data-user-id')?.trim();
+    if (dataValue && /^\d+$/.test(dataValue)) {
+      return Number(dataValue);
+    }
+
+    const scriptMatch = /(?:user_id|userId)\s*[:=]\s*['"]?(\d+)['"]?/i.exec(
+      html,
+    );
+    if (scriptMatch) {
+      return Number(scriptMatch[1]);
+    }
+
+    return null;
+  }
+
+  private async resolveUserId(jar: CookieJar): Promise<number> {
+    const jarCookies = await jar.getCookies(this.appConfig.siteBaseUrl);
+    const cookieUserId = this.parseNumericCookie(jarCookies, 'cuid');
+    if (cookieUserId !== null) {
+      return cookieUserId;
+    }
+
+    const response = await this.client.get('/view_verified_codes.php', {
+      params: { page: 1 },
+      jar,
+    } as never);
+
+    this.checkSessionExpired(response);
+
+    if (response.status >= 400) {
+      throw new BadGatewayException(
+        `Upstream user id lookup failed with status ${response.status}`,
+      );
+    }
+
+    const htmlUserId = this.parseUserIdFromHtml(String(response.data));
+    if (htmlUserId !== null) {
+      return htmlUserId;
+    }
+
+    throw new BadGatewayException(
+      'Upstream login succeeded but user id could not be resolved',
+    );
+  }
+
   async login(
     phone: string,
     password: string,
@@ -133,20 +197,8 @@ export class SiteClientService {
       throw new UnauthorizedException('Invalid upstream credentials');
     }
 
+    const userId = await this.resolveUserId(jar);
     const cookies = await this.serializeJar(jar);
-    const jarCookies = await jar.getCookies(this.appConfig.siteBaseUrl);
-    const cuidCookie = jarCookies.find((cookie) => cookie.key === 'cuid');
-
-    if (!cuidCookie) {
-      throw new BadGatewayException(
-        'Upstream login succeeded but user id cookie is missing',
-      );
-    }
-
-    const userId = parseInt(cuidCookie.value, 10);
-    if (Number.isNaN(userId)) {
-      throw new BadGatewayException('Upstream user id cookie is not numeric');
-    }
 
     return { userId, cookies };
   }

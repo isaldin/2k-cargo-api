@@ -9,6 +9,7 @@ import {
   nockLoginWrongCredentials,
   nockLoginRedirectWithoutCuid,
   nockLoginRedirectWithNonNumericCuid,
+  nockUserIdPage,
   nockLogout,
   nockLogoutFailure,
 } from '../helpers/nock.helper';
@@ -87,6 +88,7 @@ describe('AuthController (e2e)', () => {
         phone: '77073006789',
         password: 'secret',
       });
+      nockUserIdPage({});
 
       await request(app.getHttpServer())
         .post('/api/auth/login')
@@ -94,11 +96,31 @@ describe('AuthController (e2e)', () => {
         .expect(502);
     });
 
-    it('returns 502 when cuid cookie is not numeric', async () => {
+    it('uses user_id from upstream HTML when cuid cookie is not numeric', async () => {
       nockLoginRedirectWithNonNumericCuid({
         phone: '77073006789',
         password: 'secret',
       });
+      nockUserIdPage({ userId: 789 });
+
+      const response = await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({ phone: '77073006789', password: 'secret' })
+        .expect(201);
+
+      const session = await repository.findOne({
+        where: { token: response.body.token },
+      });
+      expect(session).not.toBeNull();
+      expect(session!.userId).toBe(789);
+    });
+
+    it('returns 502 when user id cannot be resolved from cookies or HTML', async () => {
+      nockLoginRedirectWithNonNumericCuid({
+        phone: '77073006789',
+        password: 'secret',
+      });
+      nockUserIdPage({});
 
       await request(app.getHttpServer())
         .post('/api/auth/login')
