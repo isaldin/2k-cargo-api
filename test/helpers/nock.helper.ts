@@ -149,8 +149,20 @@ function buildPackagesHtml(packages: Package[]): string {
 
 function buildPackagesCardHtml(packages: Package[]): string {
   const cards = packages
-    .map(
-      (pkg) => `
+    .map((pkg) => {
+      const statusItems = pkg.statuses
+        .map((status) => {
+          const cssClass = status.active ? 'text-success' : 'text-secondary';
+          const timestamp = status.rawTimestamp
+            ? ` (${status.rawTimestamp})`
+            : '';
+          return `<li class="list-group-item ${cssClass}">${status.label}${timestamp}</li>`;
+        })
+        .join('');
+      const statusList = statusItems
+        ? `<ul class="list-group list-group-flush">${statusItems}</ul>`
+        : '';
+      return `
     <div class="card">
       <div class="card-body">
         <form method="POST">
@@ -158,10 +170,11 @@ function buildPackagesCardHtml(packages: Package[]): string {
         </form>
         <h5 class="card-title">Трек-код: ${pkg.trackCode}</h5>
         <h6 class="card-subtitle">Наименование: ${pkg.name}</h6>
+        ${statusList}
       </div>
     </div>
-  `,
-    )
+  `;
+    })
     .join('');
   return `<html><body>${cards}</body></html>`;
 }

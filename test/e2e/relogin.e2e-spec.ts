@@ -42,7 +42,15 @@ describe('Relogin (e2e)', () => {
     nockLogin({ phone: session.phone, password, userId: 999 });
     nockList({
       page: 1,
-      packages: [{ id: 1, trackCode: 'RELTRACK', name: 'Relogged Package' }],
+      packages: [
+        {
+          id: 1,
+          trackCode: 'RELTRACK',
+          name: 'Relogged Package',
+          currentStatus: null,
+          statuses: [],
+        },
+      ],
     });
 
     const response = await request(app.getHttpServer())
@@ -51,7 +59,13 @@ describe('Relogin (e2e)', () => {
       .expect(200);
 
     expect(response.body).toEqual([
-      { id: 1, trackCode: 'RELTRACK', name: 'Relogged Package' },
+      {
+        id: 1,
+        trackCode: 'RELTRACK',
+        name: 'Relogged Package',
+        currentStatus: null,
+        statuses: [],
+      },
     ]);
 
     const updated = await repository.findOne({ where: { token } });

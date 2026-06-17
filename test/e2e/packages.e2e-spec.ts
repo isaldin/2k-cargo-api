@@ -31,8 +31,20 @@ describe('PackagesController (e2e)', () => {
       nockList({
         page: 1,
         packages: [
-          { id: 1, trackCode: 'TRACK12345', name: 'First Package' },
-          { id: 2, trackCode: 'TRACK67890', name: 'Second Package' },
+          {
+            id: 1,
+            trackCode: 'TRACK12345',
+            name: 'First Package',
+            currentStatus: null,
+            statuses: [],
+          },
+          {
+            id: 2,
+            trackCode: 'TRACK67890',
+            name: 'Second Package',
+            currentStatus: null,
+            statuses: [],
+          },
         ],
       });
 
@@ -46,6 +58,8 @@ describe('PackagesController (e2e)', () => {
         id: 1,
         trackCode: 'TRACK12345',
         name: 'First Package',
+        currentStatus: null,
+        statuses: [],
       });
     });
 
@@ -57,6 +71,8 @@ describe('PackagesController (e2e)', () => {
             id: 176109,
             trackCode: 'SMOKE-20260617050814',
             name: 'Smoke Test Package',
+            currentStatus: null,
+            statuses: [],
           },
         ],
       });
@@ -71,6 +87,230 @@ describe('PackagesController (e2e)', () => {
           id: 176109,
           trackCode: 'SMOKE-20260617050814',
           name: 'Smoke Test Package',
+          currentStatus: null,
+          statuses: [],
+        },
+      ]);
+    });
+
+    it('returns currentStatus as the last active row when active rows are followed by gray rows', async () => {
+      nockListCards({
+        page: 1,
+        packages: [
+          {
+            id: 176109,
+            trackCode: 'JT5495066836397',
+            name: 'Органайзер в рюкзак',
+            currentStatus: {
+              label: 'В пути',
+              timestamp: '2026-06-15T12:01:06+05:00',
+              rawTimestamp: '2026-06-15 12:01:06',
+              active: true,
+            },
+            statuses: [
+              {
+                label: 'Принят на складе Китая',
+                timestamp: '2026-06-14T11:34:29+05:00',
+                rawTimestamp: '2026-06-14 11:34:29',
+                active: true,
+              },
+              {
+                label: 'Отправлен со склада Китая',
+                timestamp: '2026-06-15T12:00:13+05:00',
+                rawTimestamp: '2026-06-15 12:00:13',
+                active: true,
+              },
+              {
+                label: 'В пути',
+                timestamp: '2026-06-15T12:01:06+05:00',
+                rawTimestamp: '2026-06-15 12:01:06',
+                active: true,
+              },
+              {
+                label: 'Прибыл в Алмату',
+                timestamp: null,
+                rawTimestamp: null,
+                active: false,
+              },
+              {
+                label: 'Прибыл в город Караганда',
+                timestamp: null,
+                rawTimestamp: null,
+                active: false,
+              },
+              {
+                label: 'Цена будет определена в Караганде',
+                timestamp: null,
+                rawTimestamp: null,
+                active: false,
+              },
+            ],
+          },
+        ],
+      });
+
+      const response = await request(app.getHttpServer())
+        .get('/api/packages?page=1')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(response.body).toEqual([
+        {
+          id: 176109,
+          trackCode: 'JT5495066836397',
+          name: 'Органайзер в рюкзак',
+          currentStatus: {
+            label: 'В пути',
+            timestamp: '2026-06-15T12:01:06+05:00',
+            rawTimestamp: '2026-06-15 12:01:06',
+            active: true,
+          },
+          statuses: [
+            {
+              label: 'Принят на складе Китая',
+              timestamp: '2026-06-14T11:34:29+05:00',
+              rawTimestamp: '2026-06-14 11:34:29',
+              active: true,
+            },
+            {
+              label: 'Отправлен со склада Китая',
+              timestamp: '2026-06-15T12:00:13+05:00',
+              rawTimestamp: '2026-06-15 12:00:13',
+              active: true,
+            },
+            {
+              label: 'В пути',
+              timestamp: '2026-06-15T12:01:06+05:00',
+              rawTimestamp: '2026-06-15 12:01:06',
+              active: true,
+            },
+            {
+              label: 'Прибыл в Алмату',
+              timestamp: null,
+              rawTimestamp: null,
+              active: false,
+            },
+            {
+              label: 'Прибыл в город Караганда',
+              timestamp: null,
+              rawTimestamp: null,
+              active: false,
+            },
+          ],
+        },
+      ]);
+    });
+
+    it('returns the last row as currentStatus when all rows are active', async () => {
+      nockListCards({
+        page: 1,
+        packages: [
+          {
+            id: 176110,
+            trackCode: 'ALLGREEN123',
+            name: 'All Green Package',
+            currentStatus: {
+              label: 'Прибыл в город Караганда',
+              timestamp: '2026-06-17T09:00:00+05:00',
+              rawTimestamp: '2026-06-17 09:00:00',
+              active: true,
+            },
+            statuses: [
+              {
+                label: 'Принят на складе Китая',
+                timestamp: '2026-06-14T11:34:29+05:00',
+                rawTimestamp: '2026-06-14 11:34:29',
+                active: true,
+              },
+              {
+                label: 'Отправлен со склада Китая',
+                timestamp: '2026-06-15T12:00:13+05:00',
+                rawTimestamp: '2026-06-15 12:00:13',
+                active: true,
+              },
+              {
+                label: 'В пути',
+                timestamp: '2026-06-15T12:01:06+05:00',
+                rawTimestamp: '2026-06-15 12:01:06',
+                active: true,
+              },
+              {
+                label: 'Прибыл в Алмату',
+                timestamp: '2026-06-16T18:00:00+05:00',
+                rawTimestamp: '2026-06-16 18:00:00',
+                active: true,
+              },
+              {
+                label: 'Прибыл в город Караганда',
+                timestamp: '2026-06-17T09:00:00+05:00',
+                rawTimestamp: '2026-06-17 09:00:00',
+                active: true,
+              },
+            ],
+          },
+        ],
+      });
+
+      const response = await request(app.getHttpServer())
+        .get('/api/packages?page=1')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(response.body).toHaveLength(1);
+      expect(response.body[0].currentStatus).toEqual({
+        label: 'Прибыл в город Караганда',
+        timestamp: '2026-06-17T09:00:00+05:00',
+        rawTimestamp: '2026-06-17 09:00:00',
+        active: true,
+      });
+    });
+
+    it('returns currentStatus null when no rows are active', async () => {
+      nockListCards({
+        page: 1,
+        packages: [
+          {
+            id: 176111,
+            trackCode: 'ALLGRAY123',
+            name: 'All Gray Package',
+            currentStatus: null,
+            statuses: [
+              {
+                label: 'Прибыл в Алмату',
+                timestamp: null,
+                rawTimestamp: null,
+                active: false,
+              },
+              {
+                label: 'Прибыл в город Караганда',
+                timestamp: null,
+                rawTimestamp: null,
+                active: false,
+              },
+            ],
+          },
+        ],
+      });
+
+      const response = await request(app.getHttpServer())
+        .get('/api/packages?page=1')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(response.body).toHaveLength(1);
+      expect(response.body[0].currentStatus).toBeNull();
+      expect(response.body[0].statuses).toEqual([
+        {
+          label: 'Прибыл в Алмату',
+          timestamp: null,
+          rawTimestamp: null,
+          active: false,
+        },
+        {
+          label: 'Прибыл в город Караганда',
+          timestamp: null,
+          rawTimestamp: null,
+          active: false,
         },
       ]);
     });
@@ -105,7 +345,15 @@ describe('PackagesController (e2e)', () => {
     it('returns 200 when package is found', async () => {
       nockList({
         page: 1,
-        packages: [{ id: 10, trackCode: 'TRACK11111', name: 'Found Package' }],
+        packages: [
+          {
+            id: 10,
+            trackCode: 'TRACK11111',
+            name: 'Found Package',
+            currentStatus: null,
+            statuses: [],
+          },
+        ],
       });
 
       const response = await request(app.getHttpServer())
@@ -117,6 +365,8 @@ describe('PackagesController (e2e)', () => {
         id: 10,
         trackCode: 'TRACK11111',
         name: 'Found Package',
+        currentStatus: null,
+        statuses: [],
       });
     });
 
@@ -148,7 +398,13 @@ describe('PackagesController (e2e)', () => {
       });
       nockListWithPackage({
         page: 1,
-        package: { id: 42, trackCode: 'NEWTRACK1', name: 'New Package' },
+        package: {
+          id: 42,
+          trackCode: 'NEWTRACK1',
+          name: 'New Package',
+          currentStatus: null,
+          statuses: [],
+        },
       });
 
       const response = await request(app.getHttpServer())
@@ -161,6 +417,8 @@ describe('PackagesController (e2e)', () => {
         id: 42,
         trackCode: 'NEWTRACK1',
         name: 'New Package',
+        currentStatus: null,
+        statuses: [],
       });
     });
 
@@ -196,7 +454,15 @@ describe('PackagesController (e2e)', () => {
     it('returns 200 with a new id after delete and create', async () => {
       nockList({
         page: 1,
-        packages: [{ id: 7, trackCode: 'OLDTRACK', name: 'Old Package' }],
+        packages: [
+          {
+            id: 7,
+            trackCode: 'OLDTRACK',
+            name: 'Old Package',
+            currentStatus: null,
+            statuses: [],
+          },
+        ],
       });
       nockDelete({ itemId: 7 });
       nockAdd({
@@ -206,7 +472,13 @@ describe('PackagesController (e2e)', () => {
       });
       nockListWithPackage({
         page: 1,
-        package: { id: 8, trackCode: 'NEWTRACK2', name: 'Updated Package' },
+        package: {
+          id: 8,
+          trackCode: 'NEWTRACK2',
+          name: 'Updated Package',
+          currentStatus: null,
+          statuses: [],
+        },
       });
 
       const response = await request(app.getHttpServer())
@@ -219,13 +491,23 @@ describe('PackagesController (e2e)', () => {
         id: 8,
         trackCode: 'NEWTRACK2',
         name: 'Updated Package',
+        currentStatus: null,
+        statuses: [],
       });
     });
 
     it('returns 502 when create fails after delete', async () => {
       nockList({
         page: 1,
-        packages: [{ id: 9, trackCode: 'OLDTRACK2', name: 'Old Package' }],
+        packages: [
+          {
+            id: 9,
+            trackCode: 'OLDTRACK2',
+            name: 'Old Package',
+            currentStatus: null,
+            statuses: [],
+          },
+        ],
       });
       nockDelete({ itemId: 9 });
       nockAdd({

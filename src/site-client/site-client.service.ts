@@ -8,12 +8,13 @@ import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import { wrapper } from 'axios-cookiejar-support';
 import * as cheerio from 'cheerio';
+import { AnyNode } from 'domhandler';
 import { Cookie, CookieJar } from 'tough-cookie';
 import { ApiSession } from '../session/session.entity';
 import { EncryptionService } from '../common/encryption.service';
 import { SessionService } from '../session/session.service';
 import { AppConfig } from '../config/app.config';
-import { Package } from './package.types';
+import { Package, PackageStatus } from './package.types';
 import { SessionExpiredError } from './site-client.errors';
 
 interface CookieSession {
@@ -383,11 +384,110 @@ export class SiteClientService {
             )) ||
         '';
 
+      const statuses = this.parseStatuses($, container);
+      const currentStatus =
+        statuses.filter((status) => status.active).pop() ?? null;
+
       if (trackCode) {
-        packages.push({ id, trackCode, name });
+        packages.push({ id, trackCode, name, currentStatus, statuses });
       }
     });
 
     return packages;
+  }
+
+  private parseStatuses(
+    $: cheerio.CheerioAPI,
+    container: cheerio.Cheerio<AnyNode>,
+  ): PackageStatus[] {
+    const statusRows = container.find('.list-group-item, li');
+    if (statusRows.length === 0) {
+      return [];
+    }
+
+    const statuses: PackageStatus[] = [];
+    statusRows.each((_, rowElement) => {
+      const row = $(rowElement);
+      const rawText = row.text().trim();
+      if (!rawText) {
+        return;
+      }
+
+      const active =
+        row.hasClass('text-success') || row.find('.text-success').length > 0;
+      const inactive =
+        row.hasClass('text-secondary') ||
+        row.hasClass('text-muted') ||
+        row.find('.text-secondary, .text-muted').length > 0;
+      const isActive = active || (!inactive && this.hasActiveIcon(row));
+
+      const { label, rawTimestamp } = this.parseStatusText(rawText);
+      if (this.isNonStatusPackageInfo(label)) {
+        return;
+      }
+
+      statuses.push({
+        label,
+        rawTimestamp,
+        timestamp: rawTimestamp ? this.parseTimestamp(rawTimestamp) : null,
+        active: isActive,
+      });
+    });
+
+    return statuses;
+  }
+
+  private isNonStatusPackageInfo(label: string): boolean {
+    return /^Цена(?:\s|$)/i.test(label);
+  }
+
+  private hasActiveIcon(row: cheerio.Cheerio<AnyNode>): boolean {
+    return (
+      row.find('[class*="check"], [class*="success"], .glyphicon-ok, .fa-check')
+        .length > 0
+    );
+  }
+
+  private parseStatusText(rawText: string): {
+    label: string;
+    rawTimestamp: string | null;
+  } {
+    const match = /^(.*?)\s*\((\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\)\s*$/.exec(
+      rawText,
+    );
+    if (match) {
+      return { label: match[1].trim(), rawTimestamp: match[2] };
+    }
+    return { label: rawText, rawTimestamp: null };
+  }
+
+  private parseTimestamp(rawTimestamp: string): string | null {
+    const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(
+      rawTimestamp,
+    );
+    if (!match) {
+      return null;
+    }
+
+    const [, year, month, day, hour, minute, second] = match.map(Number);
+    // Upstream displays timestamps in Asia/Almaty (UTC+05:00, no DST).
+    const utcDate = new Date(
+      Date.UTC(year, month - 1, day, hour - 5, minute, second),
+    );
+    return this.formatAlmatyIso(utcDate);
+  }
+
+  private formatAlmatyIso(utcDate: Date): string {
+    const offsetHours = 5;
+    const localDate = new Date(
+      utcDate.getTime() + offsetHours * 60 * 60 * 1000,
+    );
+    const y = localDate.getUTCFullYear();
+    const m = String(localDate.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(localDate.getUTCDate()).padStart(2, '0');
+    const h = String(localDate.getUTCHours()).padStart(2, '0');
+    const min = String(localDate.getUTCMinutes()).padStart(2, '0');
+    const s = String(localDate.getUTCSeconds()).padStart(2, '0');
+    return `${y}-${m}-${d}T${h}:${min}:${s}+0${offsetHours}:00`;
   }
 }
