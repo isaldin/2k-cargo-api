@@ -6,7 +6,7 @@ caddy_site_address: "{{ app_domain }}"
 caddy_email: ""
 
 # Source checkout used on the VPS. Set this to your real git remote.
-app_repo_url: git@github.com:isaldin/2k-cargo-api.git
+app_repo_url: https://github.com/isaldin/2k-cargo-api.git
 app_git_version: main
 
 app_root: /opt/2k-cargo-api
